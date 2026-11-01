@@ -4,26 +4,46 @@ import json
 admin = True
 FILE_PATH = "users_data.json"
 class Task():
-    def __init__(self, name, body, ki, soul, time=None, recurring=True, d_c=1, fixed=True):
+    def __init__(self, name, body, ki, soul, time=None, recurring=True, d_c=0, c_t = False, fixed=True):
         self.name = name
         self.body = body
         self.ki = ki
         self.soul = soul
         self.time = time
         self.recurring = recurring
-        self.d_c = 1
+        self.d_c = d_c
+        self.c_t = c_t
         self.fixed = fixed
     
     def schema(self):
-        return {"name": self.name, "body": self.body, "ki": self.ki, "soul": self.soul, "time": self.time, "recurring": self.recurring, "d_c": self.d_c, "fixed": self.fixed}
+        return {"name": self.name, "body": self.body, "ki": self.ki, "soul": self.soul, "time": self.time, "recurring": self.recurring, "d_c": self.d_c, "c_t": self.c_t, "fixed": self.fixed}
+    
+    def complete(self):
+        self.d_c += 1
+        self.c_t = True
+        print("Complete ran fine")
+        return {"body": self.body, "ki": self.ki, "soul": self.soul}
     
 
                  
 class CultivationBranch():
-    def __init__(self, name, exp = 0, level = 0):
+    def __init__(self, name, exp = 0, level = 0, exp_cap = 100):
         self.name = name
         self._exp = exp
         self._level = level
+        self._exp_cap = exp_cap
+        
+    def update(self, update_dict: dict):
+        print(update_dict)
+        for key, value in update_dict.items():
+            if key.lower() == self.name.lower():
+                print("Yay")
+                self._exp += value
+                if self._exp >= self.exp_cap:
+                    self._exp -= self._exp_cap
+                    self._level += 1
+        print("Update ran fine")
+                
         
     @property
     def exp(self):
@@ -59,8 +79,24 @@ class CultivationBranch():
         return {
             "name": self.name,
             "exp": self.exp,
-            "level": self.level
+            "level": self.level,
+            "exp_cap": self._exp_cap
         }
+    
+    @property
+    def exp_cap(self):
+            return self._exp_cap
+        
+    @exp_cap.setter
+    def exp_cap(self, new_exp_cap):
+        if(admin == True):
+            if new_exp_cap >= self._exp_cap:
+                self._exp_cap = new_exp_cap
+                print("Set successfully")
+            else:
+                print("Needs to be greater than old exp cap")
+        else:
+            print("You need admin access for this")
 
 class Cultivator():
     default_tasks = [
@@ -71,21 +107,31 @@ class Cultivator():
     Task("Embedded systems learning", 0, 10, 0, fixed=False, time=10),
     Task("Meditation", 0, 0, 10, fixed=False, time=5)
     ]
+    
     def __init__(self, name, password, cultivation = None, tasks = default_tasks):
         self.name = name
         self._password = password
         self._tasks = tasks
-        self._cultivation = [CultivationBranch("Body"), CultivationBranch("Spirit"), CultivationBranch("Ki")] if cultivation == None else cultivation
+        self._cultivation = [CultivationBranch("Body"), CultivationBranch("Soul"), CultivationBranch("Ki")] if cultivation == None else cultivation
         
     @property
     def tasks(self):
-        return [i.schema() for i in self._tasks]
+        return self._tasks
+    
+    @property
+    def cultivation(self):
+        return self._cultivation
     
     def get_status(self):
         print(f"Cultivator name: {self.name}")
         print(f"Current cultivation level:")
         for i in self._cultivation:
-            print(f"{i.name}: Level is {i.level}, Current exp progress is {i.exp}")
+            print(f"{i.name}: Level is {i.level}, Current exp progress is {i.exp}, Exp cap is {i.exp_cap}")
+        print("Current tasks are:")
+        count = 1
+        for i in self._tasks:
+            print(f"{count}. {i.name}")
+            count+=1
 
     def schema(self):
         scheme = {
@@ -129,7 +175,19 @@ class Cultivator():
         return user
         
         
-    
+def user_interface(user: Cultivator):
+    user.get_status()
+    print("Would you like to complete a task?")
+    t = input("If yes, input the number corresponding to the task: ")
+    if t.isdigit():
+        t = int(t)
+        upd = user.tasks[t-1].complete()
+        for i in user.cultivation:
+            i.update(upd)
+    else:
+        print("Invalid number try again")
+    user.get_status()
+        
 
        
 if __name__ == "__main__":
@@ -151,18 +209,18 @@ if __name__ == "__main__":
                 user = [i for i in users["users"] if i["username"] == uname and i["password"] == pword]
                 if user == []:
                     print("User does not exist or wrong password")
+                    continue
                 else:
-                    user_current = Cultivator.login(user[0]["file_loc"], uname, pword)           
+                    user_current = Cultivator.login(user[0]["file_loc"], uname, pword) 
+            user_interface(user_current)          
         
         elif(answer.upper() == "R"):
             print("Welcome new user.")
             uname = input("Enter a username to get started: ")
             pword = input("Enter a password: ")
-            user = Cultivator.register(uname, pword)
-            print("Successful registration")
-            stat = input("Would you like to view your status? Y/N")
-            if stat.upper() == "Y":
-                user.get_status()
+            user_current = Cultivator.register(uname, pword)
+            print("Successful registration\n")
+            user_interface(user_current)
                 
         elif(answer.lower() in ("exit", "stop", "break")):
             break
