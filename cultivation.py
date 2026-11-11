@@ -1,8 +1,10 @@
 import os
 import json
-
+from pydantic import BaseModel, Field, ValidationError
 admin = True
 FILE_PATH = "users_data.json"
+
+
 class Task():
     def __init__(self, name, body, ki, soul, time=None, recurring=True, d_c=0, c_t = False, fixed=True):
         self.name = name
@@ -33,16 +35,11 @@ class CultivationBranch():
         self._level = level
         self._exp_cap = exp_cap
         
-    def update(self, update_dict: dict):
-        print(update_dict)
-        for key, value in update_dict.items():
-            if key.lower() == self.name.lower():
-                print("Yay")
-                self._exp += value
-                if self._exp >= self.exp_cap:
-                    self._exp -= self._exp_cap
-                    self._level += 1
-        print("Update ran fine")
+    def update(self, value):
+        self._exp += value
+        if self._exp >= self.exp_cap:
+            self._exp -= self._exp_cap
+            self._level += 1
                 
         
     @property
@@ -108,11 +105,12 @@ class Cultivator():
     Task("Meditation", 0, 0, 10, fixed=False, time=5)
     ]
     
-    def __init__(self, name, password, cultivation = None, tasks = default_tasks):
+    def __init__(self, name, password, path, cultivation = None, tasks = default_tasks):
         self.name = name
         self._password = password
         self._tasks = tasks
-        self._cultivation = [CultivationBranch("Body"), CultivationBranch("Soul"), CultivationBranch("Ki")] if cultivation == None else cultivation
+        self.path = path
+        self._cultivation = [CultivationBranch("body"), CultivationBranch("soul"), CultivationBranch("ki")] if cultivation == None else cultivation
         
     @property
     def tasks(self):
@@ -137,11 +135,31 @@ class Cultivator():
         scheme = {
             "name": self.name,
             "password": self._password,
+            "path": self.path,
             "tasks": [j.schema() for j in self._tasks],
             "cultivation": [i.schema() for i in self._cultivation]  
         }
         return json.dumps(scheme, indent=4)
     
+    def complete(self, task_no):
+        if task_no.isdigit():
+            selected_task = self._tasks[int(task_no) - 1] if len(self._tasks) >= int(task_no) else None
+            if selected_task == None:
+                return 1
+        else:
+            return -1
+        value = selected_task.complete()
+        for branch in self.cultivation:
+            if branch.name.lower() in value.keys():
+                branch.update(value[branch.name])
+                print(f"{branch.name} was updated")
+        self.update()
+        return 0
+    
+    def update(self):
+        with open (self.path, "w") as f:
+            f.write(self.schema()) 
+            
     @classmethod
     def login(cls, path, name, password):
         with open(path, "r") as f:
@@ -167,7 +185,7 @@ class Cultivator():
         with open (FILE_PATH, "w") as f:
             json.dump(users, f, indent=4)
         
-        user = cls(name, password)            
+        user = cls(name, password, path)            
         with open(path, "w") as f:
             json.dump(json.loads(user.schema()), f, indent=4)
                     
@@ -179,13 +197,14 @@ def user_interface(user: Cultivator):
     user.get_status()
     print("Would you like to complete a task?")
     t = input("If yes, input the number corresponding to the task: ")
-    if t.isdigit():
-        t = int(t)
-        upd = user.tasks[t-1].complete()
-        for i in user.cultivation:
-            i.update(upd)
+    answer = user.complete(t)
+    if answer == 0:
+        print("update successful")
+    elif answer == -1:
+        print("Not enough tasks")
+        
     else:
-        print("Invalid number try again")
+        print("Bad input")
     user.get_status()
         
 
